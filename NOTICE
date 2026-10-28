@@ -1,0 +1,30 @@
+LiverTox DILI Timeline
+Copyright (c) 2026 Warodom Phaenthong, M.D.
+
+The app's source code, layout, timeline rendering and calculators are licensed under the
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0).
+The full licence text is in the LICENSE file and at
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+No warranty. The app is decision support for healthcare professionals. It does not establish
+causality for a suspected drug-induced liver injury and does not replace the source documents,
+local hospital protocols, product labels, clinical judgement or formal RUCAM adjudication.
+
+Not covered by this licence:
+- The agent list (likelihood categories A-E and typical injury patterns, condensed into one or two
+  sentences per agent) is summarised from LiverTox: Clinical and Research Information on
+  Drug-Induced Liver Injury [Internet], Bethesda (MD): National Institute of Diabetes and Digestive
+  and Kidney Diseases; 2012-. https://www.ncbi.nlm.nih.gov/books/NBK547852/
+  That content belongs to its authors at the NIDDK. It is summarised, not reproduced verbatim.
+  Of the 310 agents, 9 carry a verified NCBI Bookshelf chapter id; the remainder link to LiverTox
+  search and are marked "N/A - search" in the app.
+- The timing criterion summarises Danan G, Benichou C, J Clin Epidemiol 1993;46(11):1323-30.
+- The DILI case definition, the R value and the onset threshold summarise Aithal GP et al,
+  Clin Pharmacol Ther 2011;89(6):806-15.
+- The Hy's Law criteria follow the US FDA guidance "Drug-Induced Liver Injury: Premarketing
+  Clinical Evaluation" (2009).
+  That content belongs to its publishers.
+- No source PDFs or chapter texts are included in this repository.
+
+Fonts (IBM Plex Sans, IBM Plex Sans Thai, IBM Plex Mono) are loaded from Google Fonts at runtime
+and are licensed under the SIL Open Font License 1.1 by IBM.

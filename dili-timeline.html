@@ -233,7 +233,9 @@ tr.agrow:hover > td{background:var(--surface-2)}
 tr.agrow.open > td{background:var(--surface-3)}
 tr.agdetail[hidden]{display:none}
 tr.agdetail > td{background:var(--surface-2);padding:11px 14px 13px;font-size:13px;color:var(--ink-2);line-height:1.55}
-.agdetail .sum{margin:0 0 7px;max-width:88ch}
+/* the detail cell spans the whole (scrollable) table; keep its text in the visible window */
+.agdetail td > *{position:sticky;left:14px;display:block;width:fit-content;max-width:min(88ch,calc(100vw - 74px))}
+.agdetail .sum{margin:0 0 7px}
 .agdetail .why{font-size:12.5px;color:var(--ink-3);margin:0 0 7px}
 .agdetail .why b{color:var(--ink-2);font-weight:600}
 .agdetail a{font-family:var(--mono);font-size:11.5px;color:var(--accent);text-decoration:none;border-bottom:1px solid var(--rule-2)}
@@ -490,7 +492,7 @@ a.ref:hover .ref-n,a.ref:hover .ref-id{color:var(--accent)}
         <p class="eyebrow">Assessment</p>
         <h2>Agents against the LiverTox record</h2>
       </div>
-      <div class="note">Select a row for the LiverTox summary</div>
+      <div class="note">Sorted by match with the injury pattern · tap a row to fold it</div>
     </div>
     <div class="panel-bd" style="border-bottom:1px solid var(--rule)"><div class="stack" id="flags"></div></div>
     <div class="tablewrap"><table id="agentTable"></table></div>
@@ -1652,10 +1654,33 @@ function renderFlags(){
   el.innerHTML = out.join("");
 }
 
+/* How an agent's typical pattern lines up with the patient's. rank orders the assessment, best match first. */
+const FIT = {
+  match:    { rank:0, s:"crit", t:"Matches",         long:"matches the pattern" },
+  partial:  { rank:1, s:"warn", t:"Partial",         long:"partial overlap" },
+  atypical: { rank:2, s:"mute", t:"Atypical",        long:"atypical pattern" },
+  none:     { rank:3, s:"good", t:"Not hepatotoxic", long:"not a hepatotoxin" },
+  unknown:  { rank:4, s:"mute", t:"—",               long:"—" }
+};
+function fitOf(dr, pat){
+  const e = matchAgent(dr.name);
+  if(!e || !pat) return FIT.unknown;
+  if(e.pat === "None") return FIT.none;
+  if(e.pat === pat) return FIT.match;
+  if(e.pat === "Mixed" || pat === "Mixed") return FIT.partial;
+  return FIT.atypical;
+}
+/* Sorted by fit; equal fits keep their start-date order (Array.sort is stable). */
+function drugsByFit(pat){
+  return sortedDrugs().slice().sort(function(a, b){ return fitOf(a, pat).rank - fitOf(b, pat).rank; });
+}
+
+const AG_CLOSED = new Set();   /* ids of agent rows the viewer folded; everything else starts open */
 function toggleAgentRow(row){
   const d = row.nextElementSibling;
   if(!d || !d.classList.contains("agdetail")) return;
   d.hidden = !d.hidden;
+  if(d.hidden) AG_CLOSED.add(row.dataset.ag); else AG_CLOSED.delete(row.dataset.ag);
   row.classList.toggle("open", !d.hidden);
   row.setAttribute("aria-expanded", String(!d.hidden));
 }
@@ -1677,23 +1702,19 @@ function renderAgentTable(){
       '<th>Agent</th><th>Cat</th><th>Started</th><th>Stopped</th>' +
       '<th class="num">Latency</th><th>Typical</th><th>Fit</th><th>Timing</th><th>Dechallenge</th>' +
       '<th class="rowact no-print"></th></tr></thead><tbody>' +
-    drugs.map(function(dr){
+    drugsByFit(pat).map(function(dr){
       const e = matchAgent(dr.name), cat = e ? e.cat : "X";
       const tim = timingOf(dr, on), dech = dechallengeOf(dr, on, pat);
-      let fit;
-      if(!e || !pat) fit = { s:"mute", t:"—" };
-      else if(e.pat === "None") fit = { s:"good", t:"Not hepatotoxic" };
-      else if(e.pat === pat) fit = { s:"crit", t:"Matches" };
-      else if(e.pat === "Mixed" || pat === "Mixed") fit = { s:"warn", t:"Partial" };
-      else fit = { s:"mute", t:"Atypical" };
+      const fit = fitOf(dr, pat);
 
       const name = e ? e.g : dr.name;
       const url = e ? chapterUrl(e)
                     : "https://www.ncbi.nlm.nih.gov/books/n/livertox/?term=" + encodeURIComponent(dr.name);
       const lat = on && dayDiff(pd(dr.start), pd(on.date)) >= 0 ? dayDiff(pd(dr.start), pd(on.date)) + " d" : "—";
 
-      return '<tr class="agrow" data-ag="' + dr.id + '" tabindex="0" role="button" aria-expanded="false"' +
-          ' aria-label="' + esc(name) + ' — open LiverTox summary">' +
+      const isOpen = !AG_CLOSED.has(dr.id);
+      return '<tr class="agrow' + (isOpen ? ' open' : '') + '" data-ag="' + dr.id + '" tabindex="0" role="button" aria-expanded="' + isOpen + '"' +
+          ' aria-label="' + esc(name) + ' — show or hide LiverTox summary">' +
           '<td><b>' + esc(name) + '</b>' +
             (e && e.a.length ? '<div class="dimr" style="font-size:11.5px">' + esc(e.a.join(", ")) + '</div>' : '') + '</td>' +
           '<td><span class="cat ' + cat + '" title="' + esc(CAT_TEXT[cat] || CAT_TEXT.X) + '">' + cat + '</span></td>' +
@@ -1708,7 +1729,7 @@ function renderAgentTable(){
             '<button type="button" class="ghost edit" data-edrug="' + dr.id + '">Edit</button>' +
             '<button type="button" class="ghost" data-xdrug="' + dr.id + '">Remove</button></td>' +
         '</tr>' +
-        '<tr class="agdetail" hidden><td colspan="10">' +
+        '<tr class="agdetail"' + (isOpen ? '' : ' hidden') + '><td colspan="10">' +
           (e ? '<p class="sum">' + esc(e.s) + '</p>'
              : '<p class="sum">Not in the local reference set — search LiverTox directly for its likelihood category and typical pattern.</p>') +
           '<p class="why"><b>Timing:</b> ' + esc(tim.d) + ' &nbsp;·&nbsp; <b>Dechallenge:</b> ' + esc(dech.d) + '</p>' +
@@ -2238,14 +2259,10 @@ function buildPage2(){
   /* agents */
   m += eTxt(M, y, "AGENTS AGAINST THE LIVERTOX RECORD", { size:8, font:F_MONO, fill:C.ink3, ls:".1em" });
   y += 12;
-  sortedDrugs().forEach(function(dr){
+  drugsByFit(pat).forEach(function(dr){
     const e = matchAgent(dr.name), cat = e ? e.cat : "X";
     const tim = timingOf(dr, on), dech = dechallengeOf(dr, on, pat);
-    let fit = "—";
-    if(e && pat){
-      fit = e.pat === "None" ? "not a hepatotoxin" : e.pat === pat ? "matches the pattern"
-          : (e.pat === "Mixed" || pat === "Mixed") ? "partial overlap" : "atypical pattern";
-    }
+    const fit = fitOf(dr, pat).long;
     const catCol = (cat === "A" || cat === "B") ? C.critical : (cat === "C" || cat === "D") ? C.serInk : cat === "E" ? C.good : C.ink3;
     m += eRect(M, y, 15, 15, "none", catCol, 2);
     m += eTxt(M + 7.5, y + 11, cat, { size:9, font:F_MONO, weight:600, fill:catCol, anchor:"middle" });
@@ -2833,6 +2850,16 @@ init();
 (function(){
 const changelogData=[
  {
+  "version": "v1.7.1",
+  "date": "November 17, 2026",
+  "features": [
+   "The agent rows in the assessment table now open by default, so each agent’s LiverTox summary, timing and dechallenge reasoning show without a tap. Fold any row you don’t need.",
+   "Blocks you had folded in an earlier version are opened again once, so every collapsible block starts open.",
+   "The assessment is sorted by how well each agent matches the injury pattern: Matches first, then Partial, Atypical, Not hepatotoxic, and agents without a pattern last. Agents with the same match keep their start-date order, and page 2 of the A4 report follows the same order."
+  ],
+  "bugs": []
+ },
+ {
   "version": "v1.7.0",
   "date": "November 9, 2026",
   "features": [
@@ -2980,6 +3007,18 @@ paint();
   new MutationObserver(later).observe(document.body,{childList:true,subtree:true});
 })();
 </script>
+<script>
+/* Every block now opens by default. Choices saved before this version would otherwise keep
+   old blocks folded, so clear them once; any fold the viewer makes afterwards is remembered. */
+(function(){
+  try{
+    if(localStorage.getItem('dili-fold-open') === '1') return;
+    localStorage.removeItem('zfold2:' + (document.title || 'app'));
+    localStorage.setItem('dili-fold-open', '1');
+  }catch(e){}
+})();
+</script>
+
 <script id="zfold">
 /* ---------- collapsible blocks ---------- */
 (function(){
